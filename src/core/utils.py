@@ -10,6 +10,22 @@ async def chat_with_agent(agent, runner, user_message: str, session_id=None):
 
     Works with OpenAIRunner (OpenAI Red / OpenRouter Blue) and Google ADK (Gemini Red).
     """
+    import asyncio
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            return await _chat_with_agent_impl(agent, runner, user_message, session_id)
+        except Exception as e:
+            err_msg = str(e)
+            if ("503" in err_msg or "429" in err_msg or "UNAVAILABLE" in err_msg or "RESOURCE_EXHAUSTED" in err_msg) and attempt < max_retries - 1:
+                wait_time = 3 * (attempt + 1)
+                print(f"[chat_with_agent] Transient API error (attempt {attempt+1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+                continue
+            raise
+
+
+async def _chat_with_agent_impl(agent, runner, user_message: str, session_id=None):
     provider = getattr(runner, "provider", None)
     if isinstance(runner, OpenAIRunner) or provider in ("openrouter", "openai"):
         text = await runner.chat(agent, user_message)
